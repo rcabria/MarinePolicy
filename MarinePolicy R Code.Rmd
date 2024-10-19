@@ -1,5 +1,5 @@
 ---
-title: "Paper_IEO_UOC"
+title: "Meso-scale patterns in fishery production, logistics and market distribution in the Spanish Western Mediterranean."
 author: "Roberto Cabria García, José María Bellido, Daniel Fernández Martinez"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 output: 
