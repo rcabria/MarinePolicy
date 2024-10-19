@@ -1,0 +1,1117 @@
+---
+title: "Paper_IEO_UOC"
+author: "Roberto Cabria García, José María Bellido, Daniel Fernández Martinez"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 4
+    keep_text: true
+    fig_caption: yes
+    toc_float: yes
+    number_sections: yes
+toc-title: "ÍNDICE"
+---
+
+<style>
+body {text-align: justify}
+</style>
+
+```{r setup, include=FALSE}
+library(knitr)
+library(kableExtra)
+if(!(require(printr)))
+library(tinytex)
+library(rstudioapi)
+
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r library, echo=FALSE, message=FALSE, warning=FALSE}
+# ==============================
+# R Librarys
+# ==============================
+
+if(!(require(readxl))) install.packages("readxl", dep=TRUE)
+if(!(require(dplyr))) install.packages("dplyr", dep=TRUE)
+if(!(require(knitr))) install.packages("knitr", dep=TRUE)
+if(!(require(kableExtra))) install.packages("kableExtra", dep=TRUE)
+if (!(require(dlookr))) install.packages("dlookr", dep=TRUE)
+if (!(require(purrr))) install.packages("purrr", dep=TRUE)
+if (!(require(DataExplorer))) install.packages("DataExplorer", dep=TRUE)
+if (!(require(DataExplorer))) install.packages("patchwork", dep=TRUE)
+if (!(require(DataExplorer))) install.packages("GGally", dep=TRUE)
+
+```
+
+# LOAD DATA
+
+The database object of analysis was provided by the Spanish Institute of Oceanography whic contain fishing data about 49 Spanish Mediterranean harbours of six species of small pelagic fish: bogue (*Boops boops*), sardine (*Sardina pilchardus*), anchovy (*Engraulis encrasicoulus*), sardinella (*Sardinella aurita*), jack mackerels (*Trachurus sp.*) and mackerel (*Scomber sp.*).
+
+The database have information from 2009 to 2021, but not every year there are catches of the objective species in all horbours. The harbours are divided in two fishing areas: Alboran Sea GSA-01 and Northern Spain GSA-06, in this workflow both areas are analyzed separately
+
+The data from the year 2020 and 2021 are excluded from this analysis due to the unusual fisheries activity as a result of the quarantine period of COVID-19. In this step 5 harbours are excluded of the analysis.
+
+The variables are numeric, except harbours and fishing areas. The row names are defined as the variable composed by the name of the harbours and the year (*harbour_year*).
+```{r data, cache=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+
+# ==============================
+# Load data
+# ==============================
+
+# Load data
+data <- as.data.frame(read_excel("C:/Users/Rober & Laura/Desktop/Paper IEO-UOC/data.xlsx"))
+
+# Exclude data from years 2020 and 2021
+data <- subset(data, year < 2020)
+
+# Select fish zones
+data_G1 <- subset(data, fisherie_area == "PS-SPF-G1")
+data_G6 <- subset(data, fisherie_area == "PS-SPF-G6")
+
+```
+
+On the other hand, a dataset is obtained in which the number of variables is reduced. In this step, the variable *species* is created in which the species is indicated and the variables of the different species are merged in captures, fishing days and boats. This dataset is created to improve the visualization of data in Exploratory Data Analysis. As in the previous dataset, data from years 2020 & 2021 are excluded.
+```{r data2, cache=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+#Load data2
+data2 <- as.data.frame(read_excel("C:/Users/Rober & Laura/Desktop/Paper IEO-UOC/data2.xlsx"))
+
+# Exclude data from years 2020 $ 2021
+data2 <- subset(data2, year < 2020)
+
+# Select fish zones
+data2_G1 <- subset(data2, fisherie_area == "PS-SPF-G1")
+data2_G6 <- subset(data2, fisherie_area == "PS-SPF-G6")
+
+```
+
+Finally, a dataset is created for each species. NA data are excluded from these datasets.
+```{r datasp, cache=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+# Dataset for each species - Fish zone G1
+bogue_G1 <- na.omit(data_G1[, c(1:3, 5:7)])
+anchovy_G1 <- na.omit(data_G1[,c(1:3, 8:10)])
+sardine_G1 <- na.omit(data_G1[,c(1:3, 11:13)])
+sardinella_G1 <- na.omit(data_G1[,c(1:3, 14:16)])
+scomber_G1 <- na.omit(data_G1[,c(1:3, 17:19)])
+trachurus_G1 <- na.omit(data_G1[,c(1:3, 20:22)])
+
+# Dataset for each species - Fish zone G6
+bogue_G6 <- na.omit(data_G6[, c(1:3, 5:7)])
+anchovy_G6 <- na.omit(data_G6[,c(1:3, 8:10)])
+sardine_G6 <- na.omit(data_G6[,c(1:3, 11:13)])
+sardinella_G6 <- na.omit(data_G6[,c(1:3, 14:16)])
+scomber_G6 <- na.omit(data_G6[,c(1:3, 17:19)])
+trachurus_G6 <- na.omit(data_G6[,c(1:3, 20:22)])
+
+```
+
+# EXPLORATORY DATA ANALYSIS
+
+The dataset has a dimension of n=399 x p=22 variables, with fishing data from 44 harbours and 18 variables (3 per species). The structure of the data for the sardine and anchovy species in the fishing area PS-SPF-G1 for the year 2009 is show below as an example of the dataset.
+```{r example, cache=TRUE, echo=FALSE, message=FALSE, warning=FALSE, include=TRUE}
+
+# Database example
+data[data$year==2009 & data$fisherie_area=='PS-SPF-G1', c(1:3, 8:13)] %>% kbl(caption = "Table 1. Example of dataset contain. Fishing area Alboran Sea GSA-01 in 2009. Species: Sardine and anchovy") %>% kable_classic(full_width = T, html_font = "Calibri")
+
+```
+
+The dataset for fish zone GSA-01 has a dimension of n=169 x p=22 with fishing data from 16 harbours. The dataset for fish zone GSA-06 has a dimension of n=230 x p=22 with fishing data from 28 harbours.
+
+## DESCRIPTION
+
+The function *describe()* from 'dlookr' offer the description of the variables per species and year and the function *ggplot()* from 'ggplot2' is used to visualize the relation between variables.
+```{r description, cache=TRUE, echo=FALSE, message=FALSE, warning=FALSE, include=TRUE}
+# ==============================
+# Description
+# ==============================
+
+# Variables description - Fish zone GSA-01
+dscrpton_spG1 <- data2_G1 %>% group_by(species, year) %>% describe() %>% dplyr::select(described_variables, species, year, n, na, mean, sd, se_mean, IQR, skewness, kurtosis)
+dscrpton_spG1 %>% kbl(caption = "Table 2. Alboran Sea GSA-01: Variables description per species and year") %>% kable_classic(full_width = T, html_font = "calibri")
+
+# Boxplot per species for each variable - Fish zone GSA-01
+p1 <- ggplot(subset(data2_G1, species %in% c("bogue")), mapping = aes(x = species, y = catches)) +  geom_boxplot()
+p2 <- ggplot(subset(data2_G1, species %in% c("anchovy", "sardinella", "scomber",  "trachurus")), mapping = aes(x = species, y = catches)) +  geom_boxplot()
+p3 <- ggplot(subset(data2_G1, species %in% c("sardine")), mapping = aes(x = species, y = catches)) +  geom_boxplot()
+p4 <- ggplot(subset(data2_G1, species %in% c("anchovy", "scomber", "trachurus")), mapping = aes(x = species, y = fishingdays)) +  geom_boxplot()
+p5 <- ggplot(subset(data2_G1, species %in% c("bogue", "sardinella")), mapping = aes(x = species, y = fishingdays)) +  geom_boxplot()
+p6 <- ggplot(subset(data2_G1, species %in% c("sardine")), mapping = aes(x = species, y = fishingdays)) +  geom_boxplot()
+p7 <- ggplot(data2_G1, mapping = aes(x = species, y = boats)) +  geom_boxplot()
+design <- "ABBBC
+           DDEEF
+           GGGGG"
+library(patchwork)
+wrap_plots(list(A=p1, B=p2, C=p3, D=p4, E=p5, F=p6, G=p7), design = design)
+
+# Variables description - Fish zone GSA-6
+dscrpton_spG6 <- data2_G6 %>% group_by(species, year) %>% describe() %>% dplyr::select(described_variables, species, year, n, na, mean, sd, se_mean, IQR, skewness, kurtosis)
+dscrpton_spG6 %>% kbl(caption = "Table 3. Northern Spain GSA-06: Variables description per species and year") %>% kable_classic(full_width = T, html_font = "calibri")
+
+# Boxplot per species for each variable - Fish zone GSA-06
+p1 <- ggplot(subset(data2_G6, species %in% c("anchovy", "sardine")), mapping = aes(x = species, y = catches)) +  geom_boxplot()
+p2 <- ggplot(subset(data2_G6, species %in% c("bogue")), mapping = aes(x = species, y = catches)) +  geom_boxplot()
+p3 <- ggplot(subset(data2_G6, species %in% c("sardinella")), mapping = aes(x = species, y = catches)) +  geom_boxplot()
+p4 <- ggplot(subset(data2_G6, species %in% c("scomber", "trachurus")), mapping = aes(x = species, y = catches)) +  geom_boxplot()
+p5 <- ggplot(subset(data2_G6, species %in% c("anchovy", "sardine")), mapping = aes(x = species, y = fishingdays)) +  geom_boxplot()
+p6 <- ggplot(subset(data2_G6, species %in% c("bogue")), mapping = aes(x = species, y = fishingdays)) +  geom_boxplot()
+p7 <- ggplot(subset(data2_G6, species %in% c("sardinella", "scomber", "trachurus")), mapping = aes(x = species, y = fishingdays)) +  geom_boxplot()
+p8 <- ggplot(data2_G6, mapping = aes(x = species, y = boats)) +  geom_boxplot()
+design <- "AABCDD
+           EEFGGG
+           HHHHHH"
+wrap_plots(list(A=p1, B=p2, C=p3, D=p4, E=p5, F=p6, G=p7, H=p8), design = design)
+
+```
+
+In the variables description table, NA data are detected. The next graphic shows the percentage of NA in the different variables. NA data are excluded in each dataset.
+```{r na, cache=TRUE, warning=FALSE, echo=FALSE, message=FALSE, include=TRUE}
+# NA graphic
+plot_missing(data)
+
+# NA omit
+data <- na.omit(data)
+data_G1 <- na.omit(data_G1)
+data_G6 <- na.omit(data_G6)
+data2 <- na.omit(data2)
+data2_G1 <- na.omit(data2_G1)
+data2_G6 <- na.omit(data2_G6)
+
+```
+
+After deleting NA data, the dataset for fish zone Alboran Sea GSA-01 has a dimension of n=109 x p=22 with fishing data from 16 harbours. The dataset for fish zone Northern Spain GSA-06 has a dimension of n=140 x p=22 with fishing data from 28 harbours.
+
+### ALBORAN SEA GSA-01
+
+The function *summary()* offers the principal statistical descriptors for the variables of each species and year.The function *ggpairs()* from 'GGally' was used to visialuzar the relationship between variables.
+
+In this analysis, NA data are excluded.
+
+```{r dscrp_sp, cache=TRUE, include=TRUE, echo=FALSE}
+# Summary of variables per species and year - Fish zone GSA-01
+library(GGally)
+anchovy_G1[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 4. Statistical descriptors for anchovy in Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(anchovy_G1, columns = 4:6, cardinality_threshold = 50)
+bogue_G1[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 5. Statistical descriptors for bogue in Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(bogue_G1, columns = 4:6, cardinality_threshold = 50)
+sardine_G1[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 6. Statistical descriptors for sardine in Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(sardine_G1, columns = 4:6,  cardinality_threshold = 50)
+sardinella_G1[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 7. Statistical descriptors for sardinella in Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(sardinella_G1, columns = 4:6,  cardinality_threshold = 50)
+scomber_G1[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 8. Statistical descriptors for scomber in Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(scomber_G1, columns = 4:6,  cardinality_threshold = 50)
+trachurus_G1[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 9. Statistical descriptors for trachurus in Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(trachurus_G1, columns = 4:6,  cardinality_threshold = 50)
+
+```
+
+### NORTHERN SPAIN GSA-06
+
+The function *summary()* offers the principal statistical descriptors for the variables of each species and year.The function *ggpairs()* from 'GGally' was used to visialuzar the relationship between variables.
+
+In this analysis, NA data are excluded.
+
+```{r dscrp_sp2, cache=TRUE, include=TRUE, echo=FALSE}
+# Summary of variabes per species and year - Fish zone GSA-06
+anchovy_G6[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 10. Statistical descriptors for anchovy in Northen Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(anchovy_G6, columns = 4:6,  cardinality_threshold = 50)
+bogue_G6[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 11. Statistical descriptors for bogue in Northen Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(bogue_G6, columns = 4:6,  cardinality_threshold = 50)
+sardine_G6[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 12. Statistical descriptors for sardine in Northen Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(sardine_G6, columns = 4:6,  cardinality_threshold = 50)
+sardinella_G6[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 13. Statistical descriptors for sardinella in Northen Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(sardinella_G6, columns = 4:6,  cardinality_threshold = 50)
+scomber_G6[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 14. Statistical descriptors for scomber in Northen Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(scomber_G6, columns = 4:6,  cardinality_threshold = 50)
+trachurus_G6[,c(2, 4:6)] %>% split(.$year) %>% purrr::map(summary) %>% kbl(caption = "Table 15. Statistical descriptors for trachurus in Northen Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+ggpairs(trachurus_G6, columns = 4:6,  cardinality_threshold = 50)
+```
+
+## DATABASE ADAPTATION
+
+Some harbours just have captures for some species in a few years. In this step, we check how many harbours have captures for less than 30% of the years. In this step is important to consider that we have a different number of the harbours in the different datasets due to the NA being excluded.
+```{r, cache=TRUE}
+
+# Count harbour for data and each specie data- Fish zone GSA-01
+data_G1 %>% count(harbour) %>% count(n < 4)
+anchovy_G1 %>% count(harbour) %>% count(n < 4)
+bogue_G1 %>% count(harbour) %>% count(n < 4)
+sardine_G1 %>% count(harbour) %>% count(n < 4)
+sardinella_G1 %>% count(harbour) %>% count(n < 4)
+scomber_G1 %>% count(harbour) %>% count(n < 4)
+trachurus_G1 %>% count(harbour) %>% count(n < 4)
+
+# Count harbour for data and each specie data- Fish zone GSA-06
+data_G6 %>% count(harbour) %>% count(n < 4)
+anchovy_G6 %>% count(harbour) %>% count(n < 4)
+bogue_G6 %>% count(harbour) %>% count(n < 4)
+sardine_G6 %>% count(harbour) %>% count(n < 4)
+sardinella_G6 %>% count(harbour) %>% count(n < 4)
+scomber_G6 %>% count(harbour) %>% count(n < 4)
+trachurus_G6 %>% count(harbour) %>% count(n < 4)
+
+```
+
+All the harbours that appear less than 4 times in each species are erased. In fish zone Alboran Sea GSA-01:  4 harbours in data_G1, 7 harbours for anchovy, 4 harbours for bogue, 5 harbours for sardine, 3 harbours for sardinella, 4 harbours for scomber and 3 harbours for trachurus.In fish zone Northern Spain GSA-06:  1 harbours in data_G6, 2 harbours for anchovy and 2 harbours for scomber. 
+```{r, cache=TRUE}
+
+#Erase harbours (n<4) fish zone GSA-01
+data_G1 <- data_G1[!(data_G1$harbour == "Alicante") & !(data_G1$harbour == "Ametlla de Mar") & !(data_G1$harbour == "Gandía") & !(data_G1$harbour == "Vinaroz"),]
+anchovy_G1 <- anchovy_G1[!(anchovy_G1$harbour == "Alicante") & !(anchovy_G1$harbour == "Badalona") & !(anchovy_G1$harbour == "Benicarló") & !(anchovy_G1$harbour == "Calpe") & !(anchovy_G1$harbour == "Denia") & !(anchovy_G1$harbour == "Sagunto") & !(anchovy_G1$harbour == "Villajoyosa"),]
+bogue_G1 <- bogue_G1[!(bogue_G1$harbour == "Alicante") & !(bogue_G1$harbour == "Ametlla de Mar") & !(bogue_G1$harbour == "Gandía") & !(bogue_G1$harbour == "Vinaroz"),]
+sardine_G1 <- sardine_G1[!(sardine_G1$harbour == "Alicante") & !(sardine_G1$harbour == "Badalona") & !(sardine_G1$harbour == "Benicarló") & !(sardine_G1$harbour == "Mataró") & !(sardine_G1$harbour == "Villajoyosa"),]
+sardinella_G1 <- sardinella_G1[!(sardinella_G1$harbour == "Alicante") &  !(sardinella_G1$harbour == "Denia") & !(sardinella_G1$harbour == "Valencia"),]
+scomber_G1 <- scomber_G1[!(scomber_G1$harbour == "Alicante") & !(scomber_G1$harbour == "Benicarló") & !(scomber_G1$harbour == "Calpe") &  !(scomber_G1$harbour == "Denia") & !(scomber_G1$harbour == "Valencia"),]
+trachurus_G1 <- trachurus_G1[!(trachurus_G1$harbour == "Alicante") &  !(trachurus_G1$harbour == "Benicarló") & !(trachurus_G1$harbour == "Valencia"),]
+
+#Erase harbours (n<4) fish zone GSA-06
+data_G6 <- data_G6[!(data_G6$harbour == "Roquetas de Mar"),]
+anchovy_G6 <- anchovy_G6[!(anchovy_G6$harbour == "La Atunara") & !(anchovy_G6$harbour == "Roquetas de Mar"),]
+scomber_G6 <- scomber_G6[!(scomber_G6$harbour == "La Atunara") & !(scomber_G6$harbour == "Roquetas de Mar"),]
+
+```
+
+Finally, a new datasets are calculated with the median of all numeric variables for each harbour.
+```{r, cache=TRUE}
+
+# Median of variables fish zone GSA-01
+data_G1_med <- data_G1 %>% group_by(harbour) %>% summarise(median(bogue_catches), median(bogue_fishingdays), median(bogue_boats), median(anchovy_catches), median(anchovy_fishingdays), median(anchovy_boats), median(sardina_catches), median(sardina_fishingdays), median(sardina_boats), median(sardinella_catches), median(sardinella_fishingdays), median(sardinella_boats), median(scomber_catches), median(scomber_fishingdays), median(scomber_boats), median(trachurus_catches), median(trachurus_fishingdays), median(trachurus_boats))
+anchovy_G1_med <- anchovy_G1 %>% group_by(harbour) %>% summarise(median(anchovy_catches), median(anchovy_fishingdays), median(anchovy_boats))
+bogue_G1_med <- bogue_G1 %>% group_by(harbour) %>% summarise(median(bogue_catches), median(bogue_fishingdays), median(bogue_boats))
+sardine_G1_med <- sardine_G1 %>% group_by(harbour) %>% summarise(median(sardina_catches), median(sardina_fishingdays), median(sardina_boats))
+sardinella_G1_med <- sardinella_G1 %>% group_by(harbour) %>% summarise(median(sardinella_catches), median(sardinella_fishingdays), median(sardinella_boats))
+scomber_G1_med <- scomber_G1 %>% group_by(harbour) %>% summarise(median(scomber_catches), median(scomber_fishingdays), median(scomber_boats))
+trachurus_G1_med <- trachurus_G1 %>% group_by(harbour) %>% summarise(median(trachurus_catches), median(trachurus_fishingdays), median(trachurus_boats))
+
+# Median of variables fish zone GSA-06
+data_G6_med <- data_G6 %>% group_by(harbour) %>% summarise(median(bogue_catches), median(bogue_fishingdays), median(bogue_boats), median(anchovy_catches), median(anchovy_fishingdays), median(anchovy_boats), median(sardina_catches), median(sardina_fishingdays), median(sardina_boats), median(sardinella_catches), median(sardinella_fishingdays), median(sardinella_boats), median(scomber_catches), median(scomber_fishingdays), median(scomber_boats), median(trachurus_catches), median(trachurus_fishingdays), median(trachurus_boats))
+anchovy_G6_med <- anchovy_G6 %>% group_by(harbour) %>% summarise(median(anchovy_catches), median(anchovy_fishingdays), median(anchovy_boats))
+bogue_G6_med <- bogue_G6 %>% group_by(harbour) %>% summarise(median(bogue_catches), median(bogue_fishingdays), median(bogue_boats))
+sardine_G6_med <- sardine_G6 %>% group_by(harbour) %>% summarise(median(sardina_catches), median(sardina_fishingdays), median(sardina_boats))
+sardinella_G6_med <- sardinella_G6 %>% group_by(harbour) %>% summarise(median(sardinella_catches), median(sardinella_fishingdays), median(sardinella_boats))
+scomber_G6_med <- scomber_G6 %>% group_by(harbour) %>% summarise(median(scomber_catches), median(scomber_fishingdays), median(scomber_boats))
+trachurus_G6_med <- trachurus_G6 %>% group_by(harbour) %>% summarise(median(trachurus_catches), median(trachurus_fishingdays), median(trachurus_boats))
+
+```
+
+# CLUSTERING ANALYSIS
+
+The first step for clustering analysis is the standardization of the data.
+```{r, cache=TRUE}
+# Data standardization fish zone GSA-01
+data_G1_scale <- scale(data_G1_med[,2:19])
+anchovy_G1_scale <- scale(anchovy_G1_med[, 2:4])
+bogue_G1_scale <- scale(bogue_G1_med[, 2:4])
+sardine_G1_scale <- scale(sardine_G1_med[, 2:4])
+sardinella_G1_scale <- scale(sardinella_G1_med[, 2:4])
+scomber_G1_scale <- scale(scomber_G1_med[, 2:4])
+trachurus_G1_scale <- scale(trachurus_G1_med[, 2:4])
+
+rownames(data_G1_scale) <- data_G1_med$harbour
+row.names(anchovy_G1_scale) <- anchovy_G1_med$harbour
+row.names(bogue_G1_scale) <- bogue_G1_med$harbour
+row.names(sardine_G1_scale) <- sardine_G1_med$harbour
+row.names(sardinella_G1_scale) <- sardinella_G1_med$harbour
+row.names(scomber_G1_scale) <- scomber_G1_med$harbour
+row.names(trachurus_G1_scale) <- trachurus_G1_med$harbour
+
+# Data standardization fish zone GSA-06
+data_G6_scale <- scale(data_G6_med[,2:19])
+anchovy_G6_scale <- scale(anchovy_G6_med[, 2:4])
+bogue_G6_scale <- scale(bogue_G6_med[, 2:4])
+sardine_G6_scale <- scale(sardine_G6_med[, 2:4])
+sardinella_G6_scale <- scale(sardinella_G6_med[, 2:4])
+scomber_G6_scale <- scale(scomber_G6_med[, 2:4])
+trachurus_G6_scale <- scale(trachurus_G6_med[, 2:4])
+
+rownames(data_G6_scale) <- data_G6_med$harbour
+row.names(anchovy_G6_scale) <- anchovy_G6_med$harbour
+row.names(bogue_G6_scale) <- bogue_G6_med$harbour
+row.names(sardine_G6_scale) <- sardine_G6_med$harbour
+row.names(sardinella_G6_scale) <- sardinella_G6_med$harbour
+row.names(scomber_G6_scale) <- scomber_G6_med$harbour
+row.names(trachurus_G6_scale) <- trachurus_G6_med$harbour
+
+```
+
+## ALBORAN SEA GSA-01
+
+### Complete dataset
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(data_G1_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete Dataset Alboran Sea GSA-01") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 16. Cluster allocation: Complete Dataset Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : Complete Dataset Alboran Sea GSA-01")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: Complete Dataset Alboran Sea GSA-01")
+```
+
+The most influential variables in the different clusters are analyzed below and the 8 most influential variables in the cluster analysis are represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=8, title = "Top 4 most influential variables in the PCA Cluster: Complete Dataset Alboran Sea GSA-01")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(data_G1_scale, centers = 2, nstart = 15)
+k3 <- kmeans(data_G1_scale, centers = 3, nstart = 15)
+k4 <- kmeans(data_G1_scale, centers = 4, nstart = 15)
+k5 <- kmeans(data_G1_scale, centers = 5, nstart = 15)
+k6 <- kmeans(data_G1_scale, centers = 6, nstart = 15)
+k7 <- kmeans(data_G1_scale, centers = 7, nstart = 15)
+k8 <- kmeans(data_G1_scale, centers = 8, nstart = 15)
+k9 <- kmeans(data_G1_scale, centers = 9, nstart = 15)
+
+p1 <- fviz_cluster(k2, geom = "point", data = data_G1_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = data_G1_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = data_G1_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = data_G1_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = data_G1_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = data_G1_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = data_G1_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = data_G1_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_data <- hkmeans(data_G1_scale, 6)
+fviz_dend(res.hk_data, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : Complete Dataset Fish Zone PS-SPF-G1")
+fviz_cluster(res.hk_data, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: Complete Dataset Fish Zone PS-SPF-G1")
+```
+
+### Anchovy
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(anchovy_G1_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete Anchovy - Alboran Sea GSA-01") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 17.Cluster allocation: Anchovy - Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : Anchovy - Alboran Sea GSA-01")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: Anchovy - Alboran Sea GSA-01")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Anhovy - Alboran Sea GSA-01")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(anchovy_G1_scale, centers = 2, nstart = 16)
+k3 <- kmeans(anchovy_G1_scale, centers = 3, nstart = 16)
+k4 <- kmeans(anchovy_G1_scale, centers = 4, nstart = 16)
+k5 <- kmeans(anchovy_G1_scale, centers = 5, nstart = 16)
+k6 <- kmeans(anchovy_G1_scale, centers = 6, nstart = 16)
+k7 <- kmeans(anchovy_G1_scale, centers = 7, nstart = 16)
+k8 <- kmeans(anchovy_G1_scale, centers = 8, nstart = 16)
+k9 <- kmeans(anchovy_G1_scale, centers = 9, nstart = 16)
+
+p1 <- fviz_cluster(k2, geom = "point", data = anchovy_G1_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = anchovy_G1_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = anchovy_G1_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = anchovy_G1_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = anchovy_G1_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = anchovy_G1_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = anchovy_G1_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = anchovy_G1_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_anchovy <- hkmeans(anchovy_G1_scale, 6)
+fviz_dend(res.hk_anchovy, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : Anchovy - Alboran Sea GSA-01")
+fviz_cluster(res.hk_anchovy, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: Anchovy - Alboran Sea GSA-01")
+```
+
+### Bogue
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(bogue_G1_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete bogue - Alboran Sea GSA-01") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 18. Cluster allocation: bogue - Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : bogue - Alboran Sea GSA-01")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: bogue - Alboran Sea GSA-01")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Bogue - Alboran Sea GSA-01")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(bogue_G1_scale, centers = 2, nstart = 15)
+k3 <- kmeans(bogue_G1_scale, centers = 3, nstart = 15)
+k4 <- kmeans(bogue_G1_scale, centers = 4, nstart = 15)
+k5 <- kmeans(bogue_G1_scale, centers = 5, nstart = 15)
+k6 <- kmeans(bogue_G1_scale, centers = 6, nstart = 15)
+k7 <- kmeans(bogue_G1_scale, centers = 7, nstart = 15)
+k8 <- kmeans(bogue_G1_scale, centers = 8, nstart = 15)
+k9 <- kmeans(bogue_G1_scale, centers = 9, nstart = 15)
+
+p1 <- fviz_cluster(k2, geom = "point", data = bogue_G1_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = bogue_G1_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = bogue_G1_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = bogue_G1_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = bogue_G1_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = bogue_G1_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = bogue_G1_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = bogue_G1_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_bogue <- hkmeans(bogue_G1_scale, 6)
+fviz_dend(res.hk_bogue, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : bogue - Alboran Sea GSA-01")
+fviz_cluster(res.hk_bogue, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: bogue - Alboran Sea GSA-01")
+```
+
+### Sardine
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(sardine_G1_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete sardine - Alboran Sea GSA-01") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 19. Cluster allocation: sardine - Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : sardine - Alboran Sea GSA-01")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: sardine - Alboran Sea GSA-01")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Sardine - Alboran Sea GSA-01")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(sardine_G1_scale, centers = 2, nstart = 16)
+k3 <- kmeans(sardine_G1_scale, centers = 3, nstart = 16)
+k4 <- kmeans(sardine_G1_scale, centers = 4, nstart = 16)
+k5 <- kmeans(sardine_G1_scale, centers = 5, nstart = 16)
+k6 <- kmeans(sardine_G1_scale, centers = 6, nstart = 16)
+k7 <- kmeans(sardine_G1_scale, centers = 7, nstart = 16)
+k8 <- kmeans(sardine_G1_scale, centers = 8, nstart = 16)
+k9 <- kmeans(sardine_G1_scale, centers = 9, nstart = 16)
+
+p1 <- fviz_cluster(k2, geom = "point", data = sardine_G1_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = sardine_G1_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = sardine_G1_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = sardine_G1_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = sardine_G1_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = sardine_G1_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = sardine_G1_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = sardine_G1_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_sardine <- hkmeans(sardine_G1_scale, 6)
+fviz_dend(res.hk_sardine, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : sardine - Alboran Sea GSA-01")
+fviz_cluster(res.hk_sardine, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: sardine - Alboran Sea GSA-01")
+```
+
+### Sardinella
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(sardinella_G1_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete sardinella - Alboran Sea GSA-01") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 20. Cluster allocation: sardinella - Fish Zone PS-SPF-G1") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : sardinella - Fish Zone PS-SPF-G1")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: sardinella - Alboran Sea GSA-01")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Sardinella - Alboran Sea GSA-01")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(sardinella_G1_scale, centers = 2, nstart = 15)
+k3 <- kmeans(sardinella_G1_scale, centers = 3, nstart = 15)
+k4 <- kmeans(sardinella_G1_scale, centers = 4, nstart = 15)
+k5 <- kmeans(sardinella_G1_scale, centers = 5, nstart = 15)
+k6 <- kmeans(sardinella_G1_scale, centers = 6, nstart = 15)
+k7 <- kmeans(sardinella_G1_scale, centers = 7, nstart = 15)
+k8 <- kmeans(sardinella_G1_scale, centers = 8, nstart = 15)
+k9 <- kmeans(sardinella_G1_scale, centers = 9, nstart = 15)
+p1 <- fviz_cluster(k2, geom = "point", data = sardinella_G1_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = sardinella_G1_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = sardinella_G1_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = sardinella_G1_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = sardinella_G1_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = sardinella_G1_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = sardinella_G1_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = sardinella_G1_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_sardinella <- hkmeans(sardinella_G1_scale, 6)
+fviz_dend(res.hk_sardinella, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : sardinella - Alboran Sea GSA-01")
+fviz_cluster(res.hk_sardinella, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: sardinella - Alboran Sea GSA-01")
+```
+
+### Scomber
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(scomber_G1_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete scomber - Alboran Sea GSA-01") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 21. Cluster allocation: scomber - Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : scomber - Alboran Sea GSA-01")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: scomber - Alboran Sea GSA-01")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Scomber - Alboran Sea GSA-01")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(scomber_G1_scale, centers = 2, nstart = 16)
+k3 <- kmeans(scomber_G1_scale, centers = 3, nstart = 16)
+k4 <- kmeans(scomber_G1_scale, centers = 4, nstart = 16)
+k5 <- kmeans(scomber_G1_scale, centers = 5, nstart = 16)
+k6 <- kmeans(scomber_G1_scale, centers = 6, nstart = 16)
+k7 <- kmeans(scomber_G1_scale, centers = 7, nstart = 16)
+k8 <- kmeans(scomber_G1_scale, centers = 8, nstart = 16)
+k9 <- kmeans(scomber_G1_scale, centers = 9, nstart = 16)
+
+p1 <- fviz_cluster(k2, geom = "point", data = scomber_G1_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = scomber_G1_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = scomber_G1_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = scomber_G1_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = scomber_G1_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = scomber_G1_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = scomber_G1_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = scomber_G1_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_scomber <- hkmeans(scomber_G1_scale, 6)
+fviz_dend(res.hk_scomber, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : scomber - Alboran Sea GSA-01")
+fviz_cluster(res.hk_scomber, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: scomber - Alboran Sea GSA-01")
+```
+
+### Trachurus
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(trachurus_G1_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete trachurus - Alboran Sea GSA-01") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 22. Cluster allocation: trachurus - Alboran Sea GSA-01") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : trachurus - Alboran Sea GSA-01")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: trachurus - Alboran Sea GSA-01")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Trachurus - Alboran Sea GSA-01")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(trachurus_G1_scale, centers = 2, nstart = 16)
+k3 <- kmeans(trachurus_G1_scale, centers = 3, nstart = 16)
+k4 <- kmeans(trachurus_G1_scale, centers = 4, nstart = 16)
+k5 <- kmeans(trachurus_G1_scale, centers = 5, nstart = 16)
+k6 <- kmeans(trachurus_G1_scale, centers = 6, nstart = 16)
+k7 <- kmeans(trachurus_G1_scale, centers = 7, nstart = 16)
+k8 <- kmeans(trachurus_G1_scale, centers = 8, nstart = 16)
+k9 <- kmeans(trachurus_G1_scale, centers = 9, nstart = 16)
+
+p1 <- fviz_cluster(k2, geom = "point", data = trachurus_G1_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = trachurus_G1_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = trachurus_G1_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = trachurus_G1_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = trachurus_G1_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = trachurus_G1_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = trachurus_G1_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = trachurus_G1_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_trachurus <- hkmeans(trachurus_G1_scale, 6)
+fviz_dend(res.hk_trachurus, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : trachurus - Alboran Sea GSA-01")
+fviz_cluster(res.hk_trachurus, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: trachurus - Alboran Sea GSA-01")
+```
+
+### CONCLUSION GSA-01
+
+The clustering analysis for anchovy, bogue, sardinella, and mackerel did not reveal a clear mesoscale pattern. Certain harbours, such as Almería, frequently appeared in isolation.
+
+However, the clustering analysis for sardine identified three distinct clusters. In this case, the harbour of Velez-Malaga appeared as a single cluster, while the remaining two clusters displayed a clear east-west division, with the Almería area serving as a reference. 
+
+For horse mackerel, the clustering results were similar to those for sardine. However, in this case, Almería appeared alone, while the other harbours were divided into eastern and western groups.
+
+The clustering analysis of the complete dataset of small pelagic landings in the Alboran Sea identified six clusters. Notably, the harbours of Almería, Mazarrón and Vélez-Málaga are not gathered with any other harbour, configuring their own single harbour groups. The remaining three clusters included two particularly interesting groups: one consisting of the neighbouring harbours of Fuengirola and Málaga and another comprising most of the harbours located to the east of Almería’s Bay. This comprehensive analysis of the complete dataset yielded more interpretable results than the individual species analyses, highlighting the relevance of clustering the entire dataset.
+
+Harbours that consistently appeared alone in the species-specific analysis also remained isolated in the complete dataset analysis. In addition, the east-west division persisted across all analyses. The clustering results also enhanced the mesoscale interpretation, as the Fuengirola and Málaga harbours, which consistently clustered together in the species-specific analyses, were grouped into their own cluster here as well.
+
+Fishing days is the variable most influential in the species-specific analyses, except in anchovy and bogue where the fishing days variable has a similar level of influence that the most influence variable. The number of vessels is the variable with less influence, except in bogue where it is the most influential.In contrast, considering the complete dataset, five of the eighth variables with more influence are the number of vessels.
+
+Overall, the results from the total analysis in Alboran Sea GSA-01 suggest common patterns that could reflect the relationship between local markets and how fishermen choose where to land their catches. For instance, the neighbouring clustering of Fuengirola and Málaga indicates a close market relationship, while the isolation of harbours like Almería and Vélez-Málaga suggests distinct market conditions influencing fishing decisions.
+
+## NORTHERN SPAIN GSA-06
+
+### Complete dataset
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(data_G6_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete Dataset Northern Spain GSA-06") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 23. Cluster allocation: Complete Dataset Northern Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : Complete Dataset Northern Spain GSA-06")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: Complete Dataset Northern Spain GSA-06")
+```
+
+The most influential variables in the different clusters are analyzed below and the 8 most influential variables in the cluster analysis are represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=8, title = "Top 4 most influential variables in the PCA Cluster: Complete Dataset - Northern Spain GSA-06")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(data_G6_scale, centers = 2, nstart = 20)
+k3 <- kmeans(data_G6_scale, centers = 3, nstart = 20)
+k4 <- kmeans(data_G6_scale, centers = 4, nstart = 20)
+k5 <- kmeans(data_G6_scale, centers = 5, nstart = 20)
+k6 <- kmeans(data_G6_scale, centers = 6, nstart = 20)
+k7 <- kmeans(data_G6_scale, centers = 7, nstart = 20)
+k8 <- kmeans(data_G6_scale, centers = 8, nstart = 20)
+k9 <- kmeans(data_G6_scale, centers = 9, nstart = 20)
+
+p1 <- fviz_cluster(k2, geom = "point", data = data_G6_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = data_G6_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = data_G6_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = data_G6_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = data_G6_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = data_G6_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = data_G6_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = data_G6_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_data <- hkmeans(data_G6_scale, 6)
+fviz_dend(res.hk_data, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : Complete Dataset Northern Spain GSA-06")
+fviz_cluster(res.hk_data, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: Complete Dataset Northern Spain GSA-06")
+```
+
+### Anchovy
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(anchovy_G6_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete Anchovy - Northern Spain GSA-06") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 24. Cluster allocation: Anchovy - Northern Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : Anchovy - Northern Spain GSA-06")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: Anchovy - Northern Spain GSA-06")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Anhovy - Northern Spain GSA-06")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(anchovy_G6_scale, centers = 2, nstart = 27)
+k3 <- kmeans(anchovy_G6_scale, centers = 3, nstart = 27)
+k4 <- kmeans(anchovy_G6_scale, centers = 4, nstart = 27)
+k5 <- kmeans(anchovy_G6_scale, centers = 5, nstart = 27)
+k6 <- kmeans(anchovy_G6_scale, centers = 6, nstart = 27)
+k7 <- kmeans(anchovy_G6_scale, centers = 7, nstart = 27)
+k8 <- kmeans(anchovy_G6_scale, centers = 8, nstart = 27)
+k9 <- kmeans(anchovy_G6_scale, centers = 9, nstart = 27)
+
+p1 <- fviz_cluster(k2, geom = "point", data = anchovy_G6_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = anchovy_G6_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = anchovy_G6_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = anchovy_G6_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = anchovy_G6_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = anchovy_G6_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = anchovy_G6_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = anchovy_G6_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_anchovy <- hkmeans(anchovy_G6_scale, 6)
+fviz_dend(res.hk_anchovy, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : Anchovy - Northern Spain GSA-06")
+fviz_cluster(res.hk_anchovy, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: Anchovy - Northern Spain GSA-06")
+```
+
+### Bogue
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(bogue_G6_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete bogue - Northern Spain GSA-06") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 25. Cluster allocation: bogue - Northern Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : bogue - Northern Spain GSA-06")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: bogue - Northern Spain GSA-06")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Bogue - Northern Spain GSA-06")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(bogue_G6_scale, centers = 2, nstart = 20)
+k3 <- kmeans(bogue_G6_scale, centers = 3, nstart = 20)
+k4 <- kmeans(bogue_G6_scale, centers = 4, nstart = 20)
+k5 <- kmeans(bogue_G6_scale, centers = 5, nstart = 20)
+k6 <- kmeans(bogue_G6_scale, centers = 6, nstart = 20)
+k7 <- kmeans(bogue_G6_scale, centers = 7, nstart = 20)
+k8 <- kmeans(bogue_G6_scale, centers = 8, nstart = 20)
+k9 <- kmeans(bogue_G6_scale, centers = 9, nstart = 20)
+
+p1 <- fviz_cluster(k2, geom = "point", data = bogue_G6_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = bogue_G6_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = bogue_G6_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = bogue_G6_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = bogue_G6_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = bogue_G6_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = bogue_G6_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = bogue_G6_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_bogue <- hkmeans(bogue_G6_scale, 6)
+fviz_dend(res.hk_bogue, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : bogue - Northern Spain GSA-06")
+fviz_cluster(res.hk_bogue, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: bogue - Northern Spain GSA-06")
+```
+
+### Sardine
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(sardine_G6_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete sardine - Northern Spain GSA-06") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 26. Cluster allocation: sardine - Northern Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : sardine - Northern Spain GSA-06")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: sardine - Northern Spain GSA-06")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Sardine - Northern Spain GSA-06")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(sardine_G6_scale, centers = 2, nstart = 25)
+k3 <- kmeans(sardine_G6_scale, centers = 3, nstart = 25)
+k4 <- kmeans(sardine_G6_scale, centers = 4, nstart = 25)
+k5 <- kmeans(sardine_G6_scale, centers = 5, nstart = 25)
+k6 <- kmeans(sardine_G6_scale, centers = 6, nstart = 25)
+k7 <- kmeans(sardine_G6_scale, centers = 7, nstart = 25)
+k8 <- kmeans(sardine_G6_scale, centers = 8, nstart = 25)
+k9 <- kmeans(sardine_G6_scale, centers = 9, nstart = 25)
+
+p1 <- fviz_cluster(k2, geom = "point", data = sardine_G6_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = sardine_G6_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = sardine_G6_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = sardine_G6_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = sardine_G6_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = sardine_G6_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = sardine_G6_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = sardine_G6_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_sardine <- hkmeans(sardine_G6_scale, 6)
+fviz_dend(res.hk_sardine, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : sardine - Northern Spain GSA-06")
+fviz_cluster(res.hk_sardine, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: sardine - Northern Spain GSA-06")
+```
+
+### Sardinella
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(sardinella_G6_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete sardinella - Northern Spain GSA-06") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 27. Cluster allocation: sardinella - Northern Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : sardinella - Northern Spain GSA-06")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: sardinella - Northern Spain GSA-06")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Sardinella - Northern Spain GSA-06")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(sardinella_G6_scale, centers = 2, nstart = 22)
+k3 <- kmeans(sardinella_G6_scale, centers = 3, nstart = 22)
+k4 <- kmeans(sardinella_G6_scale, centers = 4, nstart = 22)
+k5 <- kmeans(sardinella_G6_scale, centers = 5, nstart = 22)
+k6 <- kmeans(sardinella_G6_scale, centers = 6, nstart = 22)
+k7 <- kmeans(sardinella_G6_scale, centers = 7, nstart = 22)
+k8 <- kmeans(sardinella_G6_scale, centers = 8, nstart = 22)
+k9 <- kmeans(sardinella_G6_scale, centers = 9, nstart = 22)
+
+p1 <- fviz_cluster(k2, geom = "point", data = sardinella_G6_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = sardinella_G6_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = sardinella_G6_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = sardinella_G6_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = sardinella_G6_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = sardinella_G6_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = sardinella_G6_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = sardinella_G6_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_sardinella <- hkmeans(sardinella_G6_scale, 6)
+fviz_dend(res.hk_sardinella, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : sardinella - Northern Spain GSA-06")
+fviz_cluster(res.hk_sardinella, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: sardinella - Northern Spain GSA-06")
+```
+
+### Scomber
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(scomber_G6_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete scomber - Northern Spain GSA-06") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 28. Cluster allocation: scomber - Northern Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : scomber - Northern Spain GSA-06")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: scomber - Northern Spain GSA-06")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Scomber - Northern Spain GSA-06")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(scomber_G6_scale, centers = 2, nstart = 23)
+k3 <- kmeans(scomber_G6_scale, centers = 3, nstart = 23)
+k4 <- kmeans(scomber_G6_scale, centers = 4, nstart = 23)
+k5 <- kmeans(scomber_G6_scale, centers = 5, nstart = 23)
+k6 <- kmeans(scomber_G6_scale, centers = 6, nstart = 23)
+k7 <- kmeans(scomber_G6_scale, centers = 7, nstart = 23)
+k8 <- kmeans(scomber_G6_scale, centers = 8, nstart = 23)
+k9 <- kmeans(scomber_G6_scale, centers = 9, nstart = 23)
+
+p1 <- fviz_cluster(k2, geom = "point", data = scomber_G6_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = scomber_G6_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = scomber_G6_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = scomber_G6_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = scomber_G6_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = scomber_G6_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = scomber_G6_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = scomber_G6_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_scomber <- hkmeans(scomber_G6_scale, 6)
+fviz_dend(res.hk_scomber, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : scomber - Northern Spain GSA-06")
+fviz_cluster(res.hk_scomber, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: scomber - Northern Spain GSA-06")
+```
+
+### Trachurus
+
+#### Hierarchical PCA clustering
+```{r, cache=TRUE, include=TRUE}
+res.pca <- PCA(trachurus_G6_scale, ncp = 3, graph = FALSE)
+fviz_pca_biplot(res.pca, title = "PCA - Biplot Complete trachurus - Northern Spain GSA-06") + theme_minimal()
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc <- HCPC(res.pca, graph = FALSE)
+res.hcpc$data.clust %>% kbl(caption = "Table 29. Cluster allocation: trachurus - Northern Spain GSA-06") %>% kable_classic(full_width = F, html_font = "Calibri")
+fviz_dend(res.hcpc, cex = 0.7, palette = "jco", rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 0.8, main = "PCA Cluster dendogram: : trachurus - Northern Spain GSA-06")
+fviz_cluster(res.hcpc, repel = TRUE, show.clust.cent = TRUE, palette = "jco", ggtheme = theme_minimal(), main = "Factor map", title = "PCA Cluster plot: trachurus - Northern Spain GSA-06")
+```
+
+The influence of the variables on the clusters is then analyzed and the influence of each variable on the cluster analysis is represented.
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hcpc$desc.var$quanti
+fviz_contrib(res.pca, choice="var", axes=1, top=4, title = "Influential level of variables in the PCA Cluster: Trachurus - Northern Spain GSA-06")
+```
+
+#### Hierarchical K-mean clustering
+
+```{r, cache=TRUE, include=TRUE}
+set.seed(123)
+k2 <- kmeans(trachurus_G6_scale, centers = 2, nstart = 23)
+k3 <- kmeans(trachurus_G6_scale, centers = 3, nstart = 23)
+k4 <- kmeans(trachurus_G6_scale, centers = 4, nstart = 23)
+k5 <- kmeans(trachurus_G6_scale, centers = 5, nstart = 23)
+k6 <- kmeans(trachurus_G6_scale, centers = 6, nstart = 23)
+k7 <- kmeans(trachurus_G6_scale, centers = 7, nstart = 23)
+k8 <- kmeans(trachurus_G6_scale, centers = 8, nstart = 23)
+k9 <- kmeans(trachurus_G6_scale, centers = 9, nstart = 23)
+
+p1 <- fviz_cluster(k2, geom = "point", data = trachurus_G6_scale) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point", data = trachurus_G6_scale) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point", data = trachurus_G6_scale) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point", data = trachurus_G6_scale) + ggtitle("k = 5")
+p5 <- fviz_cluster(k6, geom = "point", data = trachurus_G6_scale) + ggtitle("k = 6")
+p6 <- fviz_cluster(k7, geom = "point", data = trachurus_G6_scale) + ggtitle("k = 7")
+p7 <- fviz_cluster(k8, geom = "point", data = trachurus_G6_scale) + ggtitle("k = 8")
+p8 <- fviz_cluster(k9, geom = "point", data = trachurus_G6_scale) + ggtitle("k = 9")
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, nrow = 4)
+
+```
+
+```{r, cache=TRUE, warning=FALSE, include=TRUE}
+res.hk_trachurus <- hkmeans(trachurus_G6_scale, 6)
+fviz_dend(res.hk_trachurus, cex = 0.6, palette = "jco", rect = TRUE, rect_border = "jco", rect_fill = TRUE, main = "K-means Cluster dendogram: : trachurus - Northern Spain GSA-06")
+fviz_cluster(res.hk_trachurus, palette = "jco", repel = TRUE, ggtheme = theme_classic(), title = "K-means Cluster plot: trachurus - Northern Spain GSA-06")
+```
+
+### CONCLUSION GSA-06
+
+The PCA clustering analysis results for anchovy identified four distinct groups, with one cluster containing the harbours of Castellón and Tarragona, which are in the vicinity of the Ebro River Delta. The remaining three clusters comprised smaller groups of neighbouring harbours. These patterns were also confirmed by the k-means clustering analysis, which identified six clusters. In one cluster, four harbours from the southern Valencia Community were grouped, while another cluster included the Catalonian harbours of Cambrils, Blanes, and Palamós.
+
+The clustering analysis results for Bogue identified groups which do not provide a clear mesoscale interpretation, with several harbours appearing isolated.
+
+The PCA clustering analysis results for sardine determined three groups, one of which contained harbours near the Ebro Delta, indicating a possible mesoscale fishing area. The other two clusters suggested smaller groups of neighbouring harbours. The k-means analysis, with six clusters, introduced two interesting grouping structures: one with two harbours in southern Alicante, and another with the neighbouring harbours of Barcelona and Vilanova y la Geltrú.
+
+The PCA clustering analysis results for sardinella did not show a clear mesoscale pattern, as the harbour of Torrevieja appeared isolated. However, the k-means identified six groups, three of which consisted of single-port clusters in the southern area, suggesting possible mesoscale fishing patterns.
+
+The PCA clustering analysis results for scomber showed three groups without clear mesoscale patterns, except for the neighbouring harbours of Barcelona and Vilanova i la Geltrú with Torrevieja. In the k-means analysis, two groups of neighbouring harbours were identified: one with Barcelona and Vilanova i la Geltrú, and another with Alicante and Altea. The harbour of Torrevieja appeared as a single-port group in the k-means results.
+
+The PCA clustering analysis for horse mackerel also did not reveal clear mesoscale patterns. In the k-means analysis, six clusters were identified, with Torrevieja and Blanes forming single-port clusters. Two groups of neighbouring harbours were detected: one with Barcelona and Vilanova i la Geltrú, and another with Alicante and Altea.
+
+For the complete dataset (Figure 8) in the fishing area GSA-06, the PCA clustering analysis identified six clusters, with Tarragona standing. Two of the clusters grouped most of the northern Catalonian harbours. Other two cluster groups neighbouring harbours, one with Alicante and Altea and one with Barcelona and Vilanova i la Geltrú. The latter cluster also included Castellón, suggesting a possible mesoscale fishing area around the Ebro Delta. The k-means analysis for the complete dataset differed slightly, placing Castellón with Tarragona.
+
+Fishing days is the variable most influential in the species-specific analyses while the number of vessels is the variable with less influence, except in bogue where it is the second. In contrast, considering the complete dataset, we observed again a bigger influence of the number of vessels but, in this case, with a similar level of influence of fishing days.
+
+The overall results for the GSA-06 fishing area highlight several potential mesoscale fishing zones: Catalonia, the Gulf of Valencia, and the Gulf of Alicante. Within Catalonia, three smaller sub-areas were identified: one in southern Catalonia around the Ebro Delta, another in the north around the Gulf of Roses, and a third in central Catalonia, near Barcelona province. The clustering consistently grouped neighbouring harbours, such as Barcelona and Vilanova i la Geltrú. The relationship between Alicante, Torrevieja, and Altea suggests a more complex situation, where fishermen may adjust their landing locations based on market conditions. 
+
+# ACKNOWLEDGEMENTS
+
+Landings and fishing effort data collection has been co-funded by the EU through the European Maritime and Fisheries Fund (EMFF) within the National Program of collection, management and use of data in the fisheries sector and support for scientific advice regarding the Common Fisheries Policy.
+
+# R CODE
+
+```{r get-labels}
+
+labs = knitr::all_labels()
+labs = setdiff(labs, c("setup", "get-labels"))
+
+```
+
+```{r all-code, ref.label=labs, eval=FALSE, echo=TRUE, include=TRUE}
+```
